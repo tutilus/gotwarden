@@ -33,9 +33,13 @@ type Datastore interface {
 	AllCiphers() (*[]CipherData, error)
 	AddCipher(cipher *CipherData) error
 	GetCiphersByUserUUID(uuid string) (*[]CipherData, error)
+	GetCiphersByFolderUUID(uuid string) (*[]CipherData, error)
 	SaveCipher(cipher *CipherData) error
 	DeleteCipher(cipher *CipherData) error
 	GetCipher(uuid string) *CipherData
+	GetAttachment(uuid string) *AttachmentData
+	AddAttachment(a *AttachmentData) error
+	DeleteAttachment(f *AttachmentData) error
 }
 
 // DB injector
@@ -59,7 +63,7 @@ func NewDB(typeDb, connectDb string) (*DB, error) {
 	dbmap.AddTableWithName(Device{}, "devices").SetKeys(false, "UUID")
 	dbmap.AddTableWithName(Folder{}, "folders").SetKeys(false, "UUID")
 	dbmap.AddTableWithName(CipherData{}, "ciphers").SetKeys(false, "UUID")
-	dbmap.AddTableWithName(Attachment{}, "attachments").SetKeys(false, "UUID")
+	dbmap.AddTableWithName(AttachmentData{}, "attachments").SetKeys(false, "UUID")
 
 	err = dbmap.CreateTablesIfNotExists()
 	if err != nil {

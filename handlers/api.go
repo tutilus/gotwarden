@@ -5,6 +5,7 @@ import (
 	"gotwarden/util"
 	"log"
 	"net/http"
+	"regexp"
 	"time"
 
 	jwt "github.com/appleboy/gin-jwt/v2"
@@ -28,7 +29,7 @@ type PreLogin struct {
 	Email string `json:"email" binding:"required"`
 }
 
-// Cipher object
+// Cipher data request
 type Cipher struct {
 	Type            int           `json:"type" binding:"required"`
 	FolderID        string        `json:"folderId"`
@@ -44,6 +45,17 @@ type Cipher struct {
 	Identity        interface{}   `json:"identity"`
 }
 
+// Attachment data Request
+type Attachment struct {
+	UUID string `json:"Id"`
+	Data struct {
+		Head     string `json:"head"`
+		Filename string `json:"filename"`
+	} `json:"data" binding:"required"`
+	Size int    `dv:"size" json:"Size"`
+	File []byte `db:"file" json:"File"`
+}
+
 // SignUp create a new User if doesn't exist (based on email)
 func (ctx *WardenCtx) SignUp(c *gin.Context) {
 	var l Login
@@ -51,7 +63,7 @@ func (ctx *WardenCtx) SignUp(c *gin.Context) {
 	err := c.BindJSON(&l)
 	if err != nil {
 		log.Printf("Binding error %s", err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, FormattedError("Bad data request provided"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, FormattedError("This email doesn't exist"))
 		return
 	}
 
@@ -315,6 +327,92 @@ func (ctx *WardenCtx) UpdateToken(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, FormattedError("Failed to update device"))
 		return
+	}
+}
+
+// GetAttachment provides a pointed attachment (no auth needed)
+func (ctx *WardenCtx) GetAttachment(c *gin.Context) {
+	att := ctx.Db.GetAttachment(c.Param("attachment_uuid"))
+	if att == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, FormattedError("Cannot find an attachment with this uuid"))
+		return
+	}
+
+	json := att.Jsonify()
+	json.URL = ctx.AttachmentURL + "/" + att.CipherUUID + "/" + att.UUID
+
+	c.JSON(http.StatusOK, att.Jsonify())
+}
+
+// SaveAttachment saves a pointed attachment into a Cypher
+func (ctx *WardenCtx) SaveAttachment(c *gin.Context) {
+	claim := jwt.ExtractClaims(c)
+
+	// Check if the cipher belong to the user
+	userUUID := claim["sub"].(string)
+
+	cipher := ctx.Db.GetCipher(c.Param("uuid"))
+	if cipher.UserUUID != userUUID {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, FormattedError("Oops! This cipher belong to another user"))
+		return
+	}
+	a := Attachment{}
+
+	if err := c.ShouldBindJSON(&a); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, FormattedError("Bad request: "+err.Error()))
+		return
+	}
+
+	attachment := a.ToAttachmentData(cipher.UUID)
+	ctx.Db.AddAttachment(attachment)
+	json := attachment.Jsonify()
+	json.URL = ctx.AttachmentURL + "/" + cipher.UUID + "/" + attachment.UUID
+
+	c.JSON(http.StatusOK, json)
+}
+
+// DeleteAttachment deletes a pointed attachment into a Cypher
+func (ctx *WardenCtx) DeleteAttachment(c *gin.Context) {
+	claim := jwt.ExtractClaims(c)
+
+	// Check if the cipher belong to the user
+	userUUID := claim["sub"].(string)
+
+	a := ctx.Db.GetAttachment(c.Param("uuid_attachment"))
+
+	// Check if this attachment belong to cipher
+	if a.CipherUUID != c.Param(("uuid")) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, FormattedError("The attachment doesn't belong to this cipher"))
+		return
+	}
+
+	cipher := ctx.Db.GetCipher(c.Param("uuid"))
+	if cipher.UserUUID != userUUID {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, FormattedError("Oops! This cipher belong to another user"))
+		return
+	}
+
+	// This user can delete this attachment
+	ctx.Db.DeleteAttachment(a)
+}
+
+// ToAttachmentData populates data fields for Attachment
+func (a *Attachment) ToAttachmentData(cipherUUID string) *models.AttachmentData {
+	//Get the filename from the header
+	re := regexp.MustCompile(`(?:filename=)\"(.+?)\"`)
+	filenames := re.FindStringSubmatch(a.Data.Head)
+	filename := ""
+	if len(filenames) > 0 {
+		filename = filenames[1]
+	}
+
+	return &models.AttachmentData{
+		UUID:       uuid.New().String(),
+		Filename:   filename,
+		Size:       a.Size,
+		File:       a.File,
+		CipherUUID: cipherUUID,
+		UpdateAt:   time.Now(),
 	}
 }
 

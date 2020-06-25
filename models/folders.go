@@ -55,7 +55,18 @@ func (db *DB) SaveFolder(f *Folder) error {
 
 // DeleteFolder deletes f provided
 func (db *DB) DeleteFolder(f *Folder) error {
-	_, err := db.Delete(f)
+
+	// Remove all the reference into the ciphers
+	ciphers, err := db.GetCiphersByFolderUUID(f.UUID)
+	if err != nil {
+		log.Printf("Impossible to get ciphers for this uuid and to deference it")
+		return err
+	}
+	for _, cipher := range *ciphers {
+		cipher.FolderUUID = ""
+		db.SaveCipher(&cipher)
+	}
+	_, err = db.Delete(f)
 	return err
 }
 
