@@ -13,12 +13,15 @@ import (
 
 // WardenCtx is the db datastore functions
 type WardenCtx struct {
-	Db              models.Datastore
-	Port            string
-	SecretPhrase    string
-	Validity        time.Duration
-	ValidityRefresh time.Duration
-	IdentityURL     string
+	Db             models.Datastore
+	Port           string
+	SecretPhrase   string
+	Validity       time.Duration
+	RefeshValidity time.Duration
+	IdentityURL    string
+	AttachmentURL  string
+	IconURL        string
+	StaticFilePath string
 }
 
 // Init is the constructor for WardenCtx
@@ -29,14 +32,17 @@ func Init(conf *util.Config) (*WardenCtx, error) {
 		return nil, err
 	}
 
+	// Create WardenContext from the confg data
 	return &WardenCtx{
 		db,
 		conf.Port,
-		"Phrase",
-		time.Hour,
-		// MaxRefreshTime arbitrary at 5 min after token expires
-		time.Hour + time.Duration(5*60),
-		"/identity",
+		conf.SecretPhrase,
+		conf.Validity,
+		conf.RefeshValidity,
+		conf.IdentityURL,
+		conf.AttachmentURL,
+		conf.IconURL,
+		conf.StaticFilePath,
 	}, nil
 }
 
@@ -50,6 +56,9 @@ func (ctx *WardenCtx) Router() http.Handler {
 	}
 
 	r := gin.Default()
+
+	// Static serve for icons ...
+	r.Static(ctx.IconURL, ctx.StaticFilePath)
 
 	accounts := r.Group("/api/accounts")
 	{
@@ -74,9 +83,17 @@ func (ctx *WardenCtx) Router() http.Handler {
 		auth.DELETE("/folders/:uuid", ctx.DeleteFolder)
 		auth.PUT("/devices/identifier/:uuid/clear-token", ctx.ClearToken)
 		auth.PUT("/devices/identifier/:uuid/token", ctx.UpdateToken)
+		auth.POST("/ciphers/:uuid/attachment", ctx.SaveAttachment)
+		auth.DELETE("/cyphers/:uuid/attachment/:attachment_uuid", ctx.DeleteAttachment)
+		auth.POST("/ciphers/:uuid/attachment/:attachment_id/delete", ctx.DeleteAttachment)
 	}
 
-	identity := r.Group("/identity")
+	attachment := r.Group(ctx.AttachmentURL)
+	{
+		attachment.GET("/:uuid/:attachment_uuid", ctx.GetAttachment)
+	}
+
+	identity := r.Group(ctx.IdentityURL)
 	{
 		identity.POST("/connect/token", func(c *gin.Context) {
 
@@ -102,10 +119,6 @@ func (ctx *WardenCtx) Router() http.Handler {
 			}
 		})
 	}
-
-	r.GET("/icons/:domain/icon.png", func(c *gin.Context) {
-		c.Redirect(http.StatusOK, "http://"+c.Param("domain")+"/favicon.ico")
-	})
 
 	notif := r.Group("/notifications")
 	{

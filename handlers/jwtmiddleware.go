@@ -44,7 +44,7 @@ func JwtMiddleware(ctx *WardenCtx) *jwt.GinJWTMiddleware {
 		Key:         []byte(ctx.SecretPhrase),
 		IdentityKey: "sub",
 		Timeout:     ctx.Validity,
-		MaxRefresh:  ctx.ValidityRefresh,
+		MaxRefresh:  ctx.RefeshValidity,
 		PayloadFunc: func(data interface{}) jwt.MapClaims {
 			if v, ok := data.(*AccessToken); ok {
 				return jwt.MapClaims{

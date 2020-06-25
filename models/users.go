@@ -87,6 +87,7 @@ func NewUser(name, email, masterPasswordHash, masterPasswordHint, key string, kd
 		Email:         email,
 		EmailVerified: true,
 		Culture:       "en-US",
+		Premium:       true,
 		PasswordHash:  masterPasswordHash,
 		PasswordHint:  masterPasswordHint,
 		Key:           key,
