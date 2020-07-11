@@ -12,11 +12,13 @@ import (
 
 	"gotwarden/handlers"
 	"gotwarden/util"
+	"gotwarden/version"
 
 	"github.com/joho/godotenv"
 )
 
 func init() {
+	log.Print("Try to load .env ...")
 	if err := godotenv.Load(); err != nil {
 		log.Print("No .env file found")
 	}
@@ -26,7 +28,7 @@ func main() {
 
 	wardenCtx, err := handlers.Init(util.InitConfig())
 	if err != nil {
-		log.Fatalf("Impossible de charger le contexte Warden: %s", err)
+		log.Fatalf("Impossible to load the context: %s", err)
 	}
 
 	srv := &http.Server{
@@ -34,7 +36,7 @@ func main() {
 		Handler: wardenCtx.Router(),
 	}
 
-	log.Printf("Serve on port %s", wardenCtx.Port)
+	log.Printf("Starting on port %s Gotwarden server version %s (commit %s) built at %s", wardenCtx.Port, version.Release, version.Commit, version.BuildTime)
 
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below

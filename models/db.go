@@ -51,9 +51,7 @@ type DB struct {
 func NewDB(typeDb, connectDb string) (*DB, error) {
 	db, err := sql.Open(typeDb, connectDb)
 	if err != nil {
-		return nil, err
-	}
-	if err = db.Ping(); err != nil {
+		log.Fatalf("Failed to open database of type %s using string connection %s", typeDb, connectDb)
 		return nil, err
 	}
 
